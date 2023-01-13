@@ -26,5 +26,5 @@ fn main() {
     let ws = WebSocket::new(ws_handler).unwrap();
     std::thread::spawn(move || {
         ws.listen("0.0.0.0:8080").unwrap();
-    });
+    }).join().unwrap();
 }
