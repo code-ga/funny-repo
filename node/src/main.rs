@@ -16,7 +16,7 @@ fn main() {
 
 struct MessageHandler;
 impl socket::OnMessage for MessageHandler {
-    fn call(message: socket::TWsMessageData, manger: &mut socket::MessageUtil) {
+    fn call(message: socket::MessageInput, manger: &mut socket::MessageUtil) {
         dbg!(&message);
         manger.send_msg("siuuuu".to_string());
         std::thread::sleep(Duration::from_secs(1));

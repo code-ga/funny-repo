@@ -8,6 +8,7 @@ pub struct SocketManger {
     #[allow(dead_code)]
     response: Response<Option<Vec<u8>>>,
     message_ids: Vec<String>,
+    client_id: String,
 }
 impl SocketManger {
     pub fn new(tcp_server_addr: String) -> Self {
@@ -17,6 +18,7 @@ impl SocketManger {
             socket,
             response,
             message_ids: Vec::new(),
+            client_id: uuid::Uuid::new_v4().to_string(),
         }
     }
     pub fn start_listen_message<K: OnMessage>(&mut self, _han: K) {
@@ -38,8 +40,14 @@ impl SocketManger {
                 self.message_ids.remove(index);
                 continue;
             }
-            let mut util = MessageUtil::new(&mut self.socket);
-            K::call(data.data, &mut util);
+            let mut util = MessageUtil::new(&mut self.socket, self.client_id.clone());
+            K::call(
+                MessageInput {
+                    data: data.data,
+                    client_id: self.client_id.clone(),
+                },
+                &mut util,
+            );
             if util.pushable {
                 for msg_id in util.message_ids {
                     self.message_ids.push(msg_id);
@@ -48,7 +56,7 @@ impl SocketManger {
         }
     }
     pub fn get_message_util(&mut self) -> MessageUtil {
-        MessageUtil::new(&mut self.socket)
+        MessageUtil::new(&mut self.socket, self.client_id.clone())
     }
 }
 
@@ -57,22 +65,30 @@ pub enum TWsMessageData {
     String(String),
 }
 
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
+pub struct MessageInput {
+    pub data: TWsMessageData,
+    pub client_id: String,
+}
+
 pub trait OnMessage {
-    fn call(_message: TWsMessageData, _util: &mut MessageUtil) {}
+    fn call(_message: MessageInput, _util: &mut MessageUtil) {}
 }
 
 pub struct MessageUtil<'a> {
     socket: &'a mut WebSocket<MaybeTlsStream<TcpStream>>,
     message_ids: Vec<String>,
     pushable: bool,
+    client_id: String,
 }
 
 impl<'a> MessageUtil<'a> {
-    pub fn new(socket: &'a mut WebSocket<MaybeTlsStream<TcpStream>>) -> Self {
+    pub fn new(socket: &'a mut WebSocket<MaybeTlsStream<TcpStream>>, client_id: String) -> Self {
         Self {
             socket,
             message_ids: Vec::new(),
             pushable: false,
+            client_id,
         }
     }
     pub fn send_msg(&mut self, data: String) {
@@ -81,6 +97,7 @@ impl<'a> MessageUtil<'a> {
         let msg_data = WsMessage {
             msg_id,
             data: TWsMessageData::String(data),
+            client_id: self.client_id.clone(),
         };
 
         self.socket
@@ -98,5 +115,6 @@ impl<'a> MessageUtil<'a> {
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
 struct WsMessage {
     pub msg_id: String,
+    pub client_id: String,
     pub data: TWsMessageData,
 }
